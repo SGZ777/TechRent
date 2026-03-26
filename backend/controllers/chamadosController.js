@@ -1,42 +1,220 @@
 // =============================================
 // CONTROLLER DE CHAMADOS
 // =============================================
-// TODO (alunos): implementar cada função abaixo.
-//
-// Fluxo de status:
-//   aberto -> em_atendimento -> resolvido
-//                           -> cancelado
 
 const db = require('../config/database');
 
 // GET /chamados - lista chamados
-//   admin/técnico -> todos os chamados
-//   cliente       -> apenas os seus (WHERE cliente_id = req.usuario.id)
 const listar = async (req, res) => {
-  // TODO
-  res.json({ mensagem: 'listar chamados - não implementado' });
+  try {
+    const { id, nivel_acesso } = req.usuario;
+
+    let query = `
+      SELECT 
+        c.id, c.titulo, c.descricao, c.status, c.prioridade,
+        c.criado_em, c.atualizado_em,
+        u.nome  AS cliente_nome,
+        t.nome  AS tecnico_nome,
+        e.nome  AS equipamento_nome
+      FROM chamados c
+      JOIN usuarios  u ON u.id = c.cliente_id
+      LEFT JOIN usuarios  t ON t.id = c.tecnico_id
+      LEFT JOIN equipamentos e ON e.id = c.equipamento_id
+    `;
+    const params = [];
+
+    if (nivel_acesso === 'cliente') {
+      query += ' WHERE c.cliente_id = ?';
+      params.push(id);
+    }
+
+    query += ' ORDER BY c.criado_em DESC';
+
+    const [chamados] = await db.query(query, params);
+    return res.json(chamados);
+  } catch (erro) {
+    console.error('Erro ao listar chamados:', erro);
+    return res.status(500).json({ mensagem: 'Erro interno do servidor' });
+  }
 };
 
 // GET /chamados/:id - retorna um chamado pelo ID
 const buscarPorId = async (req, res) => {
-  // TODO
-  res.json({ mensagem: 'buscarPorId - não implementado' });
+  try {
+    const { id: usuarioId, nivel_acesso } = req.usuario;
+    const { id } = req.params;
+
+    const [rows] = await db.query(
+      `SELECT 
+        c.id, c.titulo, c.descricao, c.status, c.prioridade,
+        c.criado_em, c.atualizado_em,
+        c.cliente_id,
+        u.nome  AS cliente_nome,
+        t.nome  AS tecnico_nome,
+        e.nome  AS equipamento_nome
+       FROM chamados c
+       JOIN usuarios  u ON u.id = c.cliente_id
+       LEFT JOIN usuarios  t ON t.id = c.tecnico_id
+       LEFT JOIN equipamentos e ON e.id = c.equipamento_id
+       WHERE c.id = ?`,
+      [id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ mensagem: 'Chamado não encontrado' });
+    }
+
+    const chamado = rows[0];
+
+    // Cliente só pode ver os próprios chamados
+    if (nivel_acesso === 'cliente' && chamado.cliente_id !== usuarioId) {
+      return res.status(403).json({ mensagem: 'Acesso negado' });
+    }
+
+    return res.json(chamado);
+  } catch (erro) {
+    console.error('Erro ao buscar chamado:', erro);
+    return res.status(500).json({ mensagem: 'Erro interno do servidor' });
+  }
 };
 
-// POST /chamados - abre um novo chamado (cliente/admin)
-// Body esperado: { titulo, descricao, equipamento_id, prioridade }
+// POST /chamados - abre um novo chamado
 const criar = async (req, res) => {
-  // TODO: inserir em chamados com cliente_id = req.usuario.id
-  //       e atualizar equipamentos.status para 'em_manutencao'
-  res.json({ mensagem: 'criar chamado - não implementado' });
+  const { titulo, descricao, equipamento_id, prioridade } = req.body;
+  const cliente_id = req.usuario.id;
+
+  if (!titulo || titulo.trim() === '') {
+    return res.status(400).json({ mensagem: 'O título é obrigatório' });
+  }
+  if (!descricao || descricao.trim() === '') {
+    return res.status(400).json({ mensagem: 'A descrição é obrigatória' });
+  }
+  if (!equipamento_id) {
+    return res.status(400).json({ mensagem: 'O equipamento é obrigatório' });
+  }
+
+  const prioridadesValidas = ['baixa', 'media', 'alta', 'critica'];
+  if (prioridade && !prioridadesValidas.includes(prioridade)) {
+    return res.status(400).json({ mensagem: 'Prioridade inválida' });
+  }
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // Verifica se o equipamento existe
+    const [equip] = await conn.query(
+      'SELECT id FROM equipamentos WHERE id = ?',
+      [equipamento_id]
+    );
+    if (equip.length === 0) {
+      await conn.rollback();
+      return res.status(404).json({ mensagem: 'Equipamento não encontrado' });
+    }
+
+    // Insere o chamado
+    const [resultado] = await conn.query(
+      `INSERT INTO chamados (titulo, descricao, equipamento_id, prioridade, cliente_id, status)
+       VALUES (?, ?, ?, ?, ?, 'aberto')`,
+      [titulo.trim(), descricao.trim(), equipamento_id, prioridade ?? 'media', cliente_id]
+    );
+
+    // Atualiza status do equipamento
+    await conn.query(
+      "UPDATE equipamentos SET status = 'em_manutencao' WHERE id = ?",
+      [equipamento_id]
+    );
+
+    await conn.commit();
+
+    return res.status(201).json({
+      mensagem: 'Chamado aberto com sucesso',
+      id: resultado.insertId,
+    });
+  } catch (erro) {
+    await conn.rollback();
+    console.error('Erro ao criar chamado:', erro);
+    return res.status(500).json({ mensagem: 'Erro interno do servidor' });
+  } finally {
+    conn.release();
+  }
 };
 
-// PUT /chamados/:id/status - atualiza o status do chamado (técnico/admin)
-// Body esperado: { status, tecnico_id (opcional) }
+// PUT /chamados/:id/status - atualiza o status do chamado
 const atualizarStatus = async (req, res) => {
-  // TODO: ex: aberto -> em_atendimento -> resolvido
-  //       ao resolver, atualizar equipamentos.status para 'operacional'
-  res.json({ mensagem: 'atualizarStatus - não implementado' });
+  const { id } = req.params;
+  const { status, tecnico_id } = req.body;
+
+  const statusValidos = ['em_atendimento', 'resolvido', 'cancelado'];
+  if (!status || !statusValidos.includes(status)) {
+    return res.status(400).json({
+      mensagem: `Status inválido. Use: ${statusValidos.join(', ')}`,
+    });
+  }
+
+  // Transições permitidas
+  const transicoesValidas = {
+    aberto:          ['em_atendimento', 'cancelado'],
+    em_atendimento:  ['resolvido', 'cancelado'],
+  };
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [rows] = await conn.query(
+      'SELECT id, status, equipamento_id FROM chamados WHERE id = ?',
+      [id]
+    );
+
+    if (rows.length === 0) {
+      await conn.rollback();
+      return res.status(404).json({ mensagem: 'Chamado não encontrado' });
+    }
+
+    const chamado = rows[0];
+    const transicoesPossiveis = transicoesValidas[chamado.status];
+
+    if (!transicoesPossiveis || !transicoesPossiveis.includes(status)) {
+      await conn.rollback();
+      return res.status(422).json({
+        mensagem: `Transição inválida: '${chamado.status}' -> '${status}'`,
+      });
+    }
+
+    // Monta update dinâmico
+    const campos = ['status = ?', 'atualizado_em = NOW()'];
+    const valores = [status];
+
+    if (tecnico_id) {
+      campos.push('tecnico_id = ?');
+      valores.push(tecnico_id);
+    }
+
+    valores.push(id);
+    await conn.query(
+      `UPDATE chamados SET ${campos.join(', ')} WHERE id = ?`,
+      valores
+    );
+
+    // Ao resolver, devolve o equipamento para operacional
+    if (status === 'resolvido') {
+      await conn.query(
+        "UPDATE equipamentos SET status = 'operacional' WHERE id = ?",
+        [chamado.equipamento_id]
+      );
+    }
+
+    await conn.commit();
+
+    return res.json({ mensagem: 'Status atualizado com sucesso' });
+  } catch (erro) {
+    await conn.rollback();
+    console.error('Erro ao atualizar status:', erro);
+    return res.status(500).json({ mensagem: 'Erro interno do servidor' });
+  } finally {
+    conn.release();
+  }
 };
 
 module.exports = { listar, buscarPorId, criar, atualizarStatus };

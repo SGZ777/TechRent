@@ -1,14 +1,6 @@
 // =============================================
 // CONTROLLER DE AUTENTICAÇÃO
 // =============================================
-// TODO (alunos): implementar as funções registro e login.
-//
-// Dicas:
-//   - Use bcryptjs para criptografar a senha antes de salvar (registro)
-//   - Use bcryptjs para comparar a senha no login (bcrypt.compare)
-//   - Use jsonwebtoken (jwt.sign) para gerar o token após login bem-sucedido
-//   - O payload do token deve ter: id, nome, email, nivel_acesso
-//   - NUNCA coloque a senha no payload do token!
 
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -16,14 +8,100 @@ const db = require('../config/database');
 
 // POST /auth/registro - cria um novo usuário
 const registro = async (req, res) => {
-  // TODO
-  res.json({ mensagem: 'registro - não implementado' });
+  const { usuario: nome, email, senha } = req.body;
+
+  if (!nome || nome.trim() === '') {
+    return res.status(400).json({ mensagem: 'O nome é obrigatório' });
+  }
+  if (!email || email.trim() === '') {
+    return res.status(400).json({ mensagem: 'O email é obrigatório' });
+  }
+  if (!senha || senha.trim() === '') {
+    return res.status(400).json({ mensagem: 'A senha é obrigatória' });
+  }
+
+  try {
+    // Verifica se o email já está cadastrado
+    const [usuarioExistente] = await db.query(
+      'SELECT id FROM usuarios WHERE email = ?',
+      [email]
+    );
+
+    if (usuarioExistente.length > 0) {
+      return res.status(409).json({ mensagem: 'Email já cadastrado' });
+    }
+
+    // Criptografa a senha
+    const salt = await bcrypt.genSalt(10);
+    const senhaHash = await bcrypt.hash(senha, salt);
+
+    // Insere o usuário no banco
+    const [resultado] = await db.query(
+      'INSERT INTO usuarios (nome, email, senha) VALUES (?, ?, ?)',
+      [nome.trim(), email.trim(), senhaHash]
+    );
+
+    return res.status(201).json({
+      mensagem: 'Usuário criado com sucesso',
+      id: resultado.insertId,
+    });
+  } catch (erro) {
+    console.error('Erro no registro:', erro);
+    return res.status(500).json({ mensagem: 'Erro interno do servidor' });
+  }
 };
 
 // POST /auth/login - autentica e retorna JWT
 const login = async (req, res) => {
-  // TODO
-  res.json({ mensagem: 'login - não implementado' });
+  const { email, senha } = req.body;
+
+  if (!email || email.trim() === '') {
+    return res.status(400).json({ mensagem: 'O email é obrigatório' });
+  }
+  if (!senha || senha.trim() === '') {
+    return res.status(400).json({ mensagem: 'A senha é obrigatória' });
+  }
+
+  try {
+    // Busca o usuário pelo email
+    const [rows] = await db.query(
+      'SELECT id, nome, email, senha, nivel_acesso FROM usuarios WHERE email = ?',
+      [email]
+    );
+
+    if (rows.length === 0) {
+      return res.status(401).json({ mensagem: 'Email ou senha inválidos' });
+    }
+
+    const usuario = rows[0];
+
+    // Compara a senha fornecida com o hash salvo
+    const senhaCorreta = await bcrypt.compare(senha, usuario.senha);
+
+    if (!senhaCorreta) {
+      return res.status(401).json({ mensagem: 'Email ou senha inválidos' });
+    }
+
+    // Gera o token JWT (sem incluir a senha!)
+    const token = jwt.sign(
+      {
+        id: usuario.id,
+        nome: usuario.nome,
+        email: usuario.email,
+        nivel_acesso: usuario.nivel_acesso,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '8h' }
+    );
+
+    return res.json({
+      mensagem: 'Login realizado com sucesso',
+      token,
+    });
+  } catch (erro) {
+    console.error('Erro no login:', erro);
+    return res.status(500).json({ mensagem: 'Erro interno do servidor' });
+  }
 };
 
 module.exports = { registro, login };
