@@ -11,14 +11,25 @@ const listar = async (req, res) => {
 
     let query = `
       SELECT 
-        c.id, c.titulo, c.descricao, c.status, c.prioridade,
-        c.criado_em, c.atualizado_em,
-        u.nome  AS cliente_nome,
-        t.nome  AS tecnico_nome,
-        e.nome  AS equipamento_nome
+        c.id,
+        c.titulo,
+        c.descricao,
+        c.status,
+        c.prioridade,
+        c.aberto_em AS criado_em,
+        c.aberto_em,
+        c.atualizado_em,
+        c.cliente_id,
+        c.tecnico_id,
+        c.equipamento_id,
+        u.nome AS cliente_nome,
+        t.nome AS tecnico_nome,
+        e.nome AS equipamento_nome,
+        e.categoria AS equipamento_categoria,
+        e.patrimonio AS equipamento_patrimonio
       FROM chamados c
-      JOIN usuarios  u ON u.id = c.cliente_id
-      LEFT JOIN usuarios  t ON t.id = c.tecnico_id
+      JOIN usuarios u ON u.id = c.cliente_id
+      LEFT JOIN usuarios t ON t.id = c.tecnico_id
       LEFT JOIN equipamentos e ON e.id = c.equipamento_id
     `;
     const params = [];
@@ -28,7 +39,7 @@ const listar = async (req, res) => {
       params.push(id);
     }
 
-    query += ' ORDER BY c.criado_em DESC';
+    query += ' ORDER BY c.aberto_em DESC';
 
     const [chamados] = await db.query(query, params);
     return res.json(chamados);
@@ -46,27 +57,36 @@ const buscarPorId = async (req, res) => {
 
     const [rows] = await db.query(
       `SELECT 
-        c.id, c.titulo, c.descricao, c.status, c.prioridade,
-        c.criado_em, c.atualizado_em,
+        c.id,
+        c.titulo,
+        c.descricao,
+        c.status,
+        c.prioridade,
+        c.aberto_em AS criado_em,
+        c.aberto_em,
+        c.atualizado_em,
         c.cliente_id,
-        u.nome  AS cliente_nome,
-        t.nome  AS tecnico_nome,
-        e.nome  AS equipamento_nome
+        c.tecnico_id,
+        c.equipamento_id,
+        u.nome AS cliente_nome,
+        t.nome AS tecnico_nome,
+        e.nome AS equipamento_nome,
+        e.categoria AS equipamento_categoria,
+        e.patrimonio AS equipamento_patrimonio
        FROM chamados c
-       JOIN usuarios  u ON u.id = c.cliente_id
-       LEFT JOIN usuarios  t ON t.id = c.tecnico_id
+       JOIN usuarios u ON u.id = c.cliente_id
+       LEFT JOIN usuarios t ON t.id = c.tecnico_id
        LEFT JOIN equipamentos e ON e.id = c.equipamento_id
        WHERE c.id = ?`,
       [id]
     );
 
     if (rows.length === 0) {
-      return res.status(404).json({ mensagem: 'Chamado não encontrado' });
+      return res.status(404).json({ mensagem: 'Chamado nao encontrado' });
     }
 
     const chamado = rows[0];
 
-    // Cliente só pode ver os próprios chamados
     if (nivel_acesso === 'cliente' && chamado.cliente_id !== usuarioId) {
       return res.status(403).json({ mensagem: 'Acesso negado' });
     }
@@ -84,42 +104,45 @@ const criar = async (req, res) => {
   const cliente_id = req.usuario.id;
 
   if (!titulo || titulo.trim() === '') {
-    return res.status(400).json({ mensagem: 'O título é obrigatório' });
+    return res.status(400).json({ mensagem: 'O titulo e obrigatorio' });
   }
   if (!descricao || descricao.trim() === '') {
-    return res.status(400).json({ mensagem: 'A descrição é obrigatória' });
+    return res.status(400).json({ mensagem: 'A descricao e obrigatoria' });
   }
   if (!equipamento_id) {
-    return res.status(400).json({ mensagem: 'O equipamento é obrigatório' });
+    return res.status(400).json({ mensagem: 'O equipamento e obrigatorio' });
   }
 
-  const prioridadesValidas = ['baixa', 'media', 'alta', 'critica'];
+  const prioridadesValidas = ['baixa', 'media', 'alta'];
   if (prioridade && !prioridadesValidas.includes(prioridade)) {
-    return res.status(400).json({ mensagem: 'Prioridade inválida' });
+    return res.status(400).json({ mensagem: 'Prioridade invalida' });
   }
 
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
 
-    // Verifica se o equipamento existe
     const [equip] = await conn.query(
-      'SELECT id FROM equipamentos WHERE id = ?',
+      'SELECT id, status FROM equipamentos WHERE id = ?',
       [equipamento_id]
     );
+
     if (equip.length === 0) {
       await conn.rollback();
-      return res.status(404).json({ mensagem: 'Equipamento não encontrado' });
+      return res.status(404).json({ mensagem: 'Equipamento nao encontrado' });
     }
 
-    // Insere o chamado
+    if (equip[0].status !== 'operacional') {
+      await conn.rollback();
+      return res.status(422).json({ mensagem: 'Equipamento indisponivel para novo chamado' });
+    }
+
     const [resultado] = await conn.query(
       `INSERT INTO chamados (titulo, descricao, equipamento_id, prioridade, cliente_id, status)
        VALUES (?, ?, ?, ?, ?, 'aberto')`,
-      [titulo.trim(), descricao.trim(), equipamento_id, prioridade ?? 'media', cliente_id]
+      [titulo.trim(), descricao.trim(), equipamento_id, prioridade || 'media', cliente_id]
     );
 
-    // Atualiza status do equipamento
     await conn.query(
       "UPDATE equipamentos SET status = 'em_manutencao' WHERE id = ?",
       [equipamento_id]
@@ -144,18 +167,18 @@ const criar = async (req, res) => {
 const atualizarStatus = async (req, res) => {
   const { id } = req.params;
   const { status, tecnico_id } = req.body;
+  const tecnicoResponsavel = tecnico_id || req.usuario.id;
 
   const statusValidos = ['em_atendimento', 'resolvido', 'cancelado'];
   if (!status || !statusValidos.includes(status)) {
     return res.status(400).json({
-      mensagem: `Status inválido. Use: ${statusValidos.join(', ')}`,
+      mensagem: `Status invalido. Use: ${statusValidos.join(', ')}`,
     });
   }
 
-  // Transições permitidas
   const transicoesValidas = {
-    aberto:          ['em_atendimento', 'cancelado'],
-    em_atendimento:  ['resolvido', 'cancelado'],
+    aberto: ['em_atendimento', 'cancelado'],
+    em_atendimento: ['resolvido', 'cancelado'],
   };
 
   const conn = await db.getConnection();
@@ -169,7 +192,7 @@ const atualizarStatus = async (req, res) => {
 
     if (rows.length === 0) {
       await conn.rollback();
-      return res.status(404).json({ mensagem: 'Chamado não encontrado' });
+      return res.status(404).json({ mensagem: 'Chamado nao encontrado' });
     }
 
     const chamado = rows[0];
@@ -178,27 +201,26 @@ const atualizarStatus = async (req, res) => {
     if (!transicoesPossiveis || !transicoesPossiveis.includes(status)) {
       await conn.rollback();
       return res.status(422).json({
-        mensagem: `Transição inválida: '${chamado.status}' -> '${status}'`,
+        mensagem: `Transicao invalida: '${chamado.status}' -> '${status}'`,
       });
     }
 
-    // Monta update dinâmico
     const campos = ['status = ?', 'atualizado_em = NOW()'];
     const valores = [status];
 
-    if (tecnico_id) {
+    if (status === 'em_atendimento' || status === 'resolvido') {
       campos.push('tecnico_id = ?');
-      valores.push(tecnico_id);
+      valores.push(tecnicoResponsavel);
     }
 
     valores.push(id);
+
     await conn.query(
       `UPDATE chamados SET ${campos.join(', ')} WHERE id = ?`,
       valores
     );
 
-    // Ao resolver, devolve o equipamento para operacional
-    if (status === 'resolvido') {
+    if (status === 'resolvido' || status === 'cancelado') {
       await conn.query(
         "UPDATE equipamentos SET status = 'operacional' WHERE id = ?",
         [chamado.equipamento_id]

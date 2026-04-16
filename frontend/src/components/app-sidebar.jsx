@@ -7,6 +7,7 @@ import { NavProjects } from "@/components/nav-projects"
 import { NavUser } from "@/components/nav-user"
 import { TeamSwitcher } from "@/components/team-switcher"
 import { clearStoredToken } from "@/lib/auth"
+import { formatRole } from "@/lib/formatters"
 import {
   Sidebar,
   SidebarContent,
@@ -18,6 +19,7 @@ import {
   ClipboardListIcon,
   LayoutDashboardIcon,
   MonitorCogIcon,
+  Settings2Icon,
   ShieldCheckIcon,
   TicketsIcon,
 } from "lucide-react"
@@ -28,11 +30,10 @@ export function AppSidebar({
   ...props
 }) {
   const router = useRouter()
-  const roleLabel = role === "admin" ? "Administrador" : role === "tecnico" ? "Técnico" : "Cliente"
 
   const data = {
     user: {
-      name: user?.nome || "Usuário",
+      name: user?.nome || "Usuario",
       email: user?.email || "sem-email@techrent.local",
       avatar: "",
     },
@@ -40,7 +41,7 @@ export function AppSidebar({
       {
         name: "TechRent",
         logo: <ShieldCheckIcon />,
-        plan: roleLabel,
+        plan: formatRole(role),
       },
     ],
     navMain: [
@@ -48,30 +49,29 @@ export function AppSidebar({
         title: "Painel",
         url: "/dashboard",
         icon: <LayoutDashboardIcon />,
-        isActive: true,
         items: [
           {
-            title: "Visão geral",
+            title: "Dashboard",
             url: "/dashboard",
           },
           {
             title: "Chamados",
-            url: "#",
+            url: "/chamados",
           },
         ],
       },
       {
-        title: "Operação",
-        url: "#",
+        title: "Operacao",
+        url: "/operacao",
         icon: <TicketsIcon />,
         items: [
           {
             title: "Fila de atendimento",
-            url: "#",
+            url: "/operacao",
           },
           {
-            title: "Histórico",
-            url: "#",
+            title: "Equipamentos",
+            url: "/equipamentos",
           },
         ],
       },
@@ -79,13 +79,18 @@ export function AppSidebar({
     projects: [
       {
         name: "Chamados",
-        url: "#",
+        url: "/chamados",
         icon: <ClipboardListIcon />,
       },
       {
         name: "Equipamentos",
-        url: "#",
+        url: "/equipamentos",
         icon: <MonitorCogIcon />,
+      },
+      {
+        name: "Operacao",
+        url: "/operacao",
+        icon: <Settings2Icon />,
       },
     ],
   }

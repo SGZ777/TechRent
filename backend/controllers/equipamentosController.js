@@ -4,35 +4,42 @@
 
 const db = require('../config/database');
 
-// GET /equipamentos - lista todos os equipamentos do inventário
+const statusValidos = ['operacional', 'em_manutencao', 'desativado'];
+
+// GET /equipamentos - lista todos os equipamentos do inventario
 const listar = async (req, res) => {
   try {
-    const { status, tipo } = req.query;
+    const { status, categoria } = req.query;
 
     let query = `
       SELECT 
-        e.id, e.nome, e.tipo, e.numero_serie, e.status,
-        e.criado_em, e.atualizado_em,
-        u.nome AS responsavel_nome
-      FROM equipamentos e
-      LEFT JOIN usuarios u ON u.id = e.responsavel_id
+        id,
+        nome,
+        categoria,
+        patrimonio,
+        status,
+        descricao
+      FROM equipamentos
     `;
+
     const params = [];
     const filtros = [];
 
     if (status) {
-      filtros.push('e.status = ?');
+      filtros.push('status = ?');
       params.push(status);
     }
-    if (tipo) {
-      filtros.push('e.tipo = ?');
-      params.push(tipo);
-    }
-    if (filtros.length > 0) {
-      query += ' WHERE ' + filtros.join(' AND ');
+
+    if (categoria) {
+      filtros.push('categoria = ?');
+      params.push(categoria);
     }
 
-    query += ' ORDER BY e.nome ASC';
+    if (filtros.length > 0) {
+      query += ` WHERE ${filtros.join(' AND ')}`;
+    }
+
+    query += ' ORDER BY nome ASC';
 
     const [equipamentos] = await db.query(query, params);
     return res.json(equipamentos);
@@ -49,17 +56,19 @@ const buscarPorId = async (req, res) => {
 
     const [rows] = await db.query(
       `SELECT
-        e.id, e.nome, e.tipo, e.numero_serie, e.status,
-        e.criado_em, e.atualizado_em,
-        u.nome AS responsavel_nome
-       FROM equipamentos e
-       LEFT JOIN usuarios u ON u.id = e.responsavel_id
-       WHERE e.id = ?`,
+        id,
+        nome,
+        categoria,
+        patrimonio,
+        status,
+        descricao
+       FROM equipamentos
+       WHERE id = ?`,
       [id]
     );
 
     if (rows.length === 0) {
-      return res.status(404).json({ mensagem: 'Equipamento não encontrado' });
+      return res.status(404).json({ mensagem: 'Equipamento nao encontrado' });
     }
 
     return res.json(rows[0]);
@@ -71,42 +80,39 @@ const buscarPorId = async (req, res) => {
 
 // POST /equipamentos - cadastra um novo equipamento (admin)
 const criar = async (req, res) => {
-  const { nome, tipo, numero_serie, status, responsavel_id } = req.body;
+  const { nome, categoria, patrimonio, status, descricao } = req.body;
 
   if (!nome || nome.trim() === '') {
-    return res.status(400).json({ mensagem: 'O nome é obrigatório' });
-  }
-  if (!tipo || tipo.trim() === '') {
-    return res.status(400).json({ mensagem: 'O tipo é obrigatório' });
-  }
-  if (!numero_serie || numero_serie.trim() === '') {
-    return res.status(400).json({ mensagem: 'O número de série é obrigatório' });
+    return res.status(400).json({ mensagem: 'O nome e obrigatorio' });
   }
 
-  const statusValidos = ['operacional', 'em_manutencao', 'inativo'];
+  if (!patrimonio || patrimonio.trim() === '') {
+    return res.status(400).json({ mensagem: 'O patrimonio e obrigatorio' });
+  }
+
   if (status && !statusValidos.includes(status)) {
-    return res.status(400).json({ mensagem: 'Status inválido' });
+    return res.status(400).json({ mensagem: 'Status invalido' });
   }
 
   try {
-    // Verifica número de série duplicado
     const [existente] = await db.query(
-      'SELECT id FROM equipamentos WHERE numero_serie = ?',
-      [numero_serie.trim()]
+      'SELECT id FROM equipamentos WHERE patrimonio = ?',
+      [patrimonio.trim()]
     );
+
     if (existente.length > 0) {
-      return res.status(409).json({ mensagem: 'Número de série já cadastrado' });
+      return res.status(409).json({ mensagem: 'Patrimonio ja cadastrado' });
     }
 
     const [resultado] = await db.query(
-      `INSERT INTO equipamentos (nome, tipo, numero_serie, status, responsavel_id)
+      `INSERT INTO equipamentos (nome, categoria, patrimonio, status, descricao)
        VALUES (?, ?, ?, ?, ?)`,
       [
         nome.trim(),
-        tipo.trim(),
-        numero_serie.trim(),
-        status ?? 'operacional',
-        responsavel_id ?? null,
+        categoria?.trim() || null,
+        patrimonio.trim(),
+        status || 'operacional',
+        descricao?.trim() || null,
       ]
     );
 
@@ -123,51 +129,62 @@ const criar = async (req, res) => {
 // PUT /equipamentos/:id - atualiza um equipamento (apenas admin)
 const atualizar = async (req, res) => {
   const { id } = req.params;
-  const { nome, tipo, numero_serie, status, responsavel_id } = req.body;
+  const { nome, categoria, patrimonio, status, descricao } = req.body;
 
-  const statusValidos = ['operacional', 'em_manutencao', 'inativo'];
   if (status && !statusValidos.includes(status)) {
-    return res.status(400).json({ mensagem: 'Status inválido' });
+    return res.status(400).json({ mensagem: 'Status invalido' });
   }
 
   try {
-    const [rows] = await db.query(
-      'SELECT id FROM equipamentos WHERE id = ?',
-      [id]
-    );
+    const [rows] = await db.query('SELECT id FROM equipamentos WHERE id = ?', [id]);
+
     if (rows.length === 0) {
-      return res.status(404).json({ mensagem: 'Equipamento não encontrado' });
+      return res.status(404).json({ mensagem: 'Equipamento nao encontrado' });
     }
 
-    // Verifica duplicidade de número de série (exceto o próprio registro)
-    if (numero_serie) {
+    if (patrimonio) {
       const [duplicado] = await db.query(
-        'SELECT id FROM equipamentos WHERE numero_serie = ? AND id != ?',
-        [numero_serie.trim(), id]
+        'SELECT id FROM equipamentos WHERE patrimonio = ? AND id != ?',
+        [patrimonio.trim(), id]
       );
+
       if (duplicado.length > 0) {
-        return res.status(409).json({ mensagem: 'Número de série já em uso' });
+        return res.status(409).json({ mensagem: 'Patrimonio ja em uso' });
       }
     }
 
-    // Monta update apenas com os campos enviados
     const campos = [];
     const valores = [];
 
-    if (nome)          { campos.push('nome = ?');          valores.push(nome.trim()); }
-    if (tipo)          { campos.push('tipo = ?');          valores.push(tipo.trim()); }
-    if (numero_serie)  { campos.push('numero_serie = ?');  valores.push(numero_serie.trim()); }
-    if (status)        { campos.push('status = ?');        valores.push(status); }
-    if (responsavel_id !== undefined) {
-      campos.push('responsavel_id = ?');
-      valores.push(responsavel_id);
+    if (nome !== undefined) {
+      campos.push('nome = ?');
+      valores.push(nome?.trim() || null);
+    }
+
+    if (categoria !== undefined) {
+      campos.push('categoria = ?');
+      valores.push(categoria?.trim() || null);
+    }
+
+    if (patrimonio !== undefined) {
+      campos.push('patrimonio = ?');
+      valores.push(patrimonio?.trim() || null);
+    }
+
+    if (status !== undefined) {
+      campos.push('status = ?');
+      valores.push(status);
+    }
+
+    if (descricao !== undefined) {
+      campos.push('descricao = ?');
+      valores.push(descricao?.trim() || null);
     }
 
     if (campos.length === 0) {
       return res.status(400).json({ mensagem: 'Nenhum campo para atualizar' });
     }
 
-    campos.push('atualizado_em = NOW()');
     valores.push(id);
 
     await db.query(
@@ -187,23 +204,21 @@ const remover = async (req, res) => {
   const { id } = req.params;
 
   try {
-    const [rows] = await db.query(
-      'SELECT id FROM equipamentos WHERE id = ?',
-      [id]
-    );
+    const [rows] = await db.query('SELECT id FROM equipamentos WHERE id = ?', [id]);
+
     if (rows.length === 0) {
-      return res.status(404).json({ mensagem: 'Equipamento não encontrado' });
+      return res.status(404).json({ mensagem: 'Equipamento nao encontrado' });
     }
 
-    // Bloqueia remoção se houver chamados ativos vinculados
     const [chamadosAtivos] = await db.query(
-      `SELECT id FROM chamados 
+      `SELECT id FROM chamados
        WHERE equipamento_id = ? AND status NOT IN ('resolvido', 'cancelado')`,
       [id]
     );
+
     if (chamadosAtivos.length > 0) {
       return res.status(422).json({
-        mensagem: 'Não é possível remover: equipamento possui chamados em aberto',
+        mensagem: 'Nao e possivel remover: equipamento possui chamados em aberto',
       });
     }
 
