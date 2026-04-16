@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 
 import { clearStoredToken, getCurrentUser } from "@/lib/auth"
@@ -17,7 +17,13 @@ export function useAuthenticatedUser() {
     return () => window.clearTimeout(timeoutId)
   }, [])
 
-  const user = ready ? getCurrentUser() : null
+  const user = useMemo(() => {
+    if (!ready) {
+      return null
+    }
+
+    return getCurrentUser()
+  }, [ready])
 
   useEffect(() => {
     if (!ready) {

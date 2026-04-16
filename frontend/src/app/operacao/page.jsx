@@ -59,7 +59,7 @@ export default function OperacaoPage() {
       )
       setHistorico(Array.isArray(historicoData) ? historicoData : [])
     } catch (fetchError) {
-      setError(fetchError.message || "Nao foi possivel carregar a operacao.")
+      setError(fetchError.message || "Não foi possivel carregar a operação.")
     } finally {
       setLoading(false)
     }
@@ -89,7 +89,7 @@ export default function OperacaoPage() {
       setSuccess("Fila atualizada com sucesso.")
       await loadPageData()
     } catch (updateError) {
-      setError(updateError.message || "Nao foi possivel atualizar o status.")
+      setError(updateError.message || "Não foi possivel atualizar o status.")
     }
   }
 
@@ -97,7 +97,7 @@ export default function OperacaoPage() {
     const descricao = descriptions[chamado.id]?.trim()
 
     if (!descricao) {
-      setError("Descreva a manutencao realizada antes de concluir o chamado.")
+      setError("Descreva a manutenção realizada antes de concluir o chamado.")
       return
     }
 
@@ -118,15 +118,15 @@ export default function OperacaoPage() {
       setSuccess("Manutencao registrada e chamado resolvido.")
       await loadPageData()
     } catch (submitError) {
-      setError(submitError.message || "Nao foi possivel registrar a manutencao.")
+      setError(submitError.message || "Não foi possivel registrar a manutenção.")
     }
   }
 
   return (
     <AppPageShell
       user={user}
-      title="Operacao"
-      subtitle="Gerencie a fila tecnica, acompanhe o historico de manutencoes e conclua reparos."
+      title="Operação"
+      subtitle="Gerencie a fila tecnica, acompanhe o historico de manutenções e conclua reparos."
     >
       {!canManageQueue ? (
         <SectionCard
