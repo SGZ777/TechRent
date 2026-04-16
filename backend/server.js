@@ -28,8 +28,8 @@ const app = express();
 app.use(express.json());
 
 // TODO (opcional): adicionar cors se o frontend rodar em outra porta
-// const cors = require('cors');
-// app.use(cors());
+const cors = require('cors');
+app.use(cors());
 
 // ---- Registro das rotas ----
 // Cada prefixo aponta para um arquivo de rotas separado

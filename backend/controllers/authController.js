@@ -1,48 +1,49 @@
 // =============================================
-// CONTROLLER DE AUTENTICAÇÃO
+// CONTROLLER DE AUTENTICACAO
 // =============================================
 
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../config/database');
 
-// POST /auth/registro - cria um novo usuário
+// POST /auth/registro - cria um novo usuario
 const registro = async (req, res) => {
-  const { usuario: nome, email, senha } = req.body;
+  const nome = req.body.nome || req.body.usuario;
+  const { email, senha } = req.body;
 
   if (!nome || nome.trim() === '') {
-    return res.status(400).json({ mensagem: 'O nome é obrigatório' });
+    return res.status(400).json({ mensagem: 'O nome e obrigatorio' });
   }
   if (!email || email.trim() === '') {
-    return res.status(400).json({ mensagem: 'O email é obrigatório' });
+    return res.status(400).json({ mensagem: 'O email e obrigatorio' });
   }
   if (!senha || senha.trim() === '') {
-    return res.status(400).json({ mensagem: 'A senha é obrigatória' });
+    return res.status(400).json({ mensagem: 'A senha e obrigatoria' });
+  }
+  if (senha.trim().length < 8) {
+    return res.status(400).json({ mensagem: 'A senha deve ter pelo menos 8 caracteres' });
   }
 
   try {
-    // Verifica se o email já está cadastrado
     const [usuarioExistente] = await db.query(
       'SELECT id FROM usuarios WHERE email = ?',
-      [email]
+      [email.trim()]
     );
 
     if (usuarioExistente.length > 0) {
-      return res.status(409).json({ mensagem: 'Email já cadastrado' });
+      return res.status(409).json({ mensagem: 'Email ja cadastrado' });
     }
 
-    // Criptografa a senha
     const salt = await bcrypt.genSalt(10);
     const senhaHash = await bcrypt.hash(senha, salt);
 
-    // Insere o usuário no banco
     const [resultado] = await db.query(
       'INSERT INTO usuarios (nome, email, senha) VALUES (?, ?, ?)',
       [nome.trim(), email.trim(), senhaHash]
     );
 
     return res.status(201).json({
-      mensagem: 'Usuário criado com sucesso',
+      mensagem: 'Usuario criado com sucesso',
       id: resultado.insertId,
     });
   } catch (erro) {
@@ -56,33 +57,29 @@ const login = async (req, res) => {
   const { email, senha } = req.body;
 
   if (!email || email.trim() === '') {
-    return res.status(400).json({ mensagem: 'O email é obrigatório' });
+    return res.status(400).json({ mensagem: 'O email e obrigatorio' });
   }
   if (!senha || senha.trim() === '') {
-    return res.status(400).json({ mensagem: 'A senha é obrigatória' });
+    return res.status(400).json({ mensagem: 'A senha e obrigatoria' });
   }
 
   try {
-    // Busca o usuário pelo email
     const [rows] = await db.query(
       'SELECT id, nome, email, senha, nivel_acesso FROM usuarios WHERE email = ?',
       [email]
     );
 
     if (rows.length === 0) {
-      return res.status(401).json({ mensagem: 'Email ou senha inválidos' });
+      return res.status(401).json({ mensagem: 'Email ou senha invalidos' });
     }
 
     const usuario = rows[0];
-
-    // Compara a senha fornecida com o hash salvo
     const senhaCorreta = await bcrypt.compare(senha, usuario.senha);
 
     if (!senhaCorreta) {
-      return res.status(401).json({ mensagem: 'Email ou senha inválidos' });
+      return res.status(401).json({ mensagem: 'Email ou senha invalidos' });
     }
 
-    // Gera o token JWT (sem incluir a senha!)
     const token = jwt.sign(
       {
         id: usuario.id,
