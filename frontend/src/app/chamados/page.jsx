@@ -30,10 +30,13 @@ export default function ChamadosPage() {
   const [success, setSuccess] = useState("")
   const [chamados, setChamados] = useState([])
   const [equipamentos, setEquipamentos] = useState([])
+  const [technicians, setTechnicians] = useState([])
+  const [assignedTechnicians, setAssignedTechnicians] = useState({})
   const [form, setForm] = useState(initialForm)
 
   const canCreate = user?.nivel_acesso === "cliente" || user?.nivel_acesso === "admin"
   const canUpdateStatus = user?.nivel_acesso === "tecnico" || user?.nivel_acesso === "admin"
+  const isAdmin = user?.nivel_acesso === "admin"
 
   const chamadosAbertos = useMemo(
     () => chamados.filter((item) => item.status === "aberto").length,
@@ -59,16 +62,35 @@ export default function ChamadosPage() {
         requests.push(apiFetch("/equipamentos?status=operacional"))
       }
 
-      const [chamadosData, equipamentosData = []] = await Promise.all(requests)
+      if (isAdmin) {
+        requests.push(apiFetch("/usuarios"))
+      }
+
+      const [chamadosData, equipamentosData = [], usuariosData = []] = await Promise.all(requests)
+      const tecnicos = (Array.isArray(usuariosData) ? usuariosData : []).filter(
+        (item) => item.nivel_acesso === "tecnico"
+      )
 
       setChamados(Array.isArray(chamadosData) ? chamadosData : [])
       setEquipamentos(Array.isArray(equipamentosData) ? equipamentosData : [])
+      setTechnicians(tecnicos)
+      setAssignedTechnicians((current) => {
+        const next = { ...current }
+
+        ;(Array.isArray(chamadosData) ? chamadosData : []).forEach((item) => {
+          if (item.tecnico_id && next[item.id] === undefined) {
+            next[item.id] = String(item.tecnico_id)
+          }
+        })
+
+        return next
+      })
     } catch (fetchError) {
       setError(fetchError.message || "Nao foi possivel carregar os chamados.")
     } finally {
       setLoading(false)
     }
-  }, [canCreate, user])
+  }, [canCreate, isAdmin, user])
 
   useEffect(() => {
     if (!ready || !user) {
@@ -114,9 +136,22 @@ export default function ChamadosPage() {
     setSuccess("")
 
     try {
+      const payload = { status }
+
+      if (status === "em_atendimento" && isAdmin) {
+        const tecnicoId = assignedTechnicians[id]
+
+        if (!tecnicoId) {
+          setError("Selecione um tecnico responsavel antes de iniciar o atendimento.")
+          return
+        }
+
+        payload.tecnico_id = Number(tecnicoId)
+      }
+
       await apiFetch(`/chamados/${id}/status`, {
         method: "PUT",
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(payload),
       })
 
       setSuccess("Status do chamado atualizado com sucesso.")
@@ -269,6 +304,26 @@ export default function ChamadosPage() {
 
                 {canUpdateStatus ? (
                   <div className="mt-4 flex flex-wrap gap-2">
+                    {isAdmin && item.status === "aberto" ? (
+                      <select
+                        className="h-9 min-w-56 rounded-md border border-input bg-transparent px-2.5 py-1 text-sm"
+                        value={assignedTechnicians[item.id] || ""}
+                        onChange={(event) =>
+                          setAssignedTechnicians((current) => ({
+                            ...current,
+                            [item.id]: event.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Selecione um tecnico</option>
+                        {technicians.map((technician) => (
+                          <option key={technician.id} value={technician.id}>
+                            {technician.nome} - {technician.email}
+                          </option>
+                        ))}
+                      </select>
+                    ) : null}
+
                     {item.status === "aberto" ? (
                       <>
                         <Button size="sm" onClick={() => handleStatusUpdate(item.id, "em_atendimento")}>
@@ -282,9 +337,6 @@ export default function ChamadosPage() {
 
                     {item.status === "em_atendimento" ? (
                       <>
-                        <Button size="sm" onClick={() => handleStatusUpdate(item.id, "resolvido")}>
-                          Marcar como resolvido
-                        </Button>
                         <Button size="sm" variant="outline" onClick={() => handleStatusUpdate(item.id, "cancelado")}>
                           Cancelar
                         </Button>

@@ -19,6 +19,7 @@ import {
   ClipboardListIcon,
   LayoutDashboardIcon,
   MonitorCogIcon,
+  UsersIcon,
   Settings2Icon,
   ShieldCheckIcon,
   TicketsIcon,
@@ -30,6 +31,93 @@ export function AppSidebar({
   ...props
 }) {
   const router = useRouter()
+  const isAdmin = role === "admin"
+  const canAccessOperations = role === "admin" || role === "tecnico"
+
+  const navMain = [
+    {
+      title: "Painel",
+      url: "/dashboard",
+      icon: <LayoutDashboardIcon />,
+      items: [
+        {
+          title: "Dashboard",
+          url: "/dashboard",
+        },
+        {
+          title: "Chamados",
+          url: "/chamados",
+        },
+      ],
+    },
+  ]
+
+  if (canAccessOperations || isAdmin) {
+    navMain.push({
+      title: "Operacao",
+      url: "/operacao",
+      icon: <TicketsIcon />,
+      items: [
+        {
+          title: "Fila de atendimento",
+          url: "/operacao",
+        },
+        {
+          title: "Equipamentos",
+          url: "/equipamentos",
+        },
+        ...(isAdmin
+          ? [
+              {
+                title: "Usuarios",
+                url: "/usuarios",
+              },
+            ]
+          : []),
+      ],
+    })
+  } else {
+    navMain.push({
+      title: "Inventario",
+      url: "/equipamentos",
+      icon: <MonitorCogIcon />,
+      items: [
+        {
+          title: "Equipamentos",
+          url: "/equipamentos",
+        },
+      ],
+    })
+  }
+
+  const projects = [
+    {
+      name: "Chamados",
+      url: "/chamados",
+      icon: <ClipboardListIcon />,
+    },
+    {
+      name: "Equipamentos",
+      url: "/equipamentos",
+      icon: <MonitorCogIcon />,
+    },
+  ]
+
+  if (canAccessOperations) {
+    projects.push({
+      name: "Operacao",
+      url: "/operacao",
+      icon: <Settings2Icon />,
+    })
+  }
+
+  if (isAdmin) {
+    projects.push({
+      name: "Usuarios",
+      url: "/usuarios",
+      icon: <UsersIcon />,
+    })
+  }
 
   const data = {
     user: {
@@ -44,55 +132,8 @@ export function AppSidebar({
         plan: formatRole(role),
       },
     ],
-    navMain: [
-      {
-        title: "Painel",
-        url: "/dashboard",
-        icon: <LayoutDashboardIcon />,
-        items: [
-          {
-            title: "Dashboard",
-            url: "/dashboard",
-          },
-          {
-            title: "Chamados",
-            url: "/chamados",
-          },
-        ],
-      },
-      {
-        title: "Operacao",
-        url: "/operacao",
-        icon: <TicketsIcon />,
-        items: [
-          {
-            title: "Fila de atendimento",
-            url: "/operacao",
-          },
-          {
-            title: "Equipamentos",
-            url: "/equipamentos",
-          },
-        ],
-      },
-    ],
-    projects: [
-      {
-        name: "Chamados",
-        url: "/chamados",
-        icon: <ClipboardListIcon />,
-      },
-      {
-        name: "Equipamentos",
-        url: "/equipamentos",
-        icon: <MonitorCogIcon />,
-      },
-      {
-        name: "Operacao",
-        url: "/operacao",
-        icon: <Settings2Icon />,
-      },
-    ],
+    navMain,
+    projects,
   }
 
   const handleLogout = () => {

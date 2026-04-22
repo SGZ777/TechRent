@@ -19,6 +19,7 @@ const equipamentosRoutes = require('./routes/equipamentosRoutes');
 const chamadosRoutes     = require('./routes/chamadosRoutes');
 const manutencaoRoutes   = require('./routes/manutencaoRoutes');
 const dashboardRoutes    = require('./routes/dashboardRoutes');
+const usuariosRoutes     = require('./routes/usuariosRoutes');
 
 const app = express();
 
@@ -38,6 +39,7 @@ app.use('/equipamentos', equipamentosRoutes);
 app.use('/chamados',     chamadosRoutes);
 app.use('/manutencao',   manutencaoRoutes);
 app.use('/dashboard',    dashboardRoutes);
+app.use('/usuarios',     usuariosRoutes);
 
 // ---- Rota de health check ----
 // Útil para verificar se o servidor está no ar

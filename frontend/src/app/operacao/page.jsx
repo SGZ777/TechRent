@@ -21,10 +21,13 @@ export default function OperacaoPage() {
   const [success, setSuccess] = useState("")
   const [fila, setFila] = useState([])
   const [historico, setHistorico] = useState([])
+  const [technicians, setTechnicians] = useState([])
+  const [assignedTechnicians, setAssignedTechnicians] = useState({})
   const [descriptions, setDescriptions] = useState({})
 
   const canManageQueue = user?.nivel_acesso === "tecnico" || user?.nivel_acesso === "admin"
   const canRegisterMaintenance = user?.nivel_acesso === "tecnico"
+  const isAdmin = user?.nivel_acesso === "admin"
 
   const chamadosAtivos = useMemo(
     () => fila.filter((item) => item.status !== "resolvido" && item.status !== "cancelado"),
@@ -43,14 +46,19 @@ export default function OperacaoPage() {
       if (!canManageQueue) {
         setFila([])
         setHistorico([])
+        setTechnicians([])
+        setAssignedTechnicians({})
         setLoading(false)
         return
       }
 
-      const [chamadosData, historicoData] = await Promise.all([
-        apiFetch("/chamados"),
-        apiFetch("/manutencao"),
-      ])
+      const requests = [apiFetch("/chamados"), apiFetch("/manutencao")]
+
+      if (isAdmin) {
+        requests.push(apiFetch("/usuarios"))
+      }
+
+      const [chamadosData, historicoData, usuariosData = []] = await Promise.all(requests)
 
       setFila(
         (Array.isArray(chamadosData) ? chamadosData : []).filter((item) =>
@@ -58,12 +66,28 @@ export default function OperacaoPage() {
         )
       )
       setHistorico(Array.isArray(historicoData) ? historicoData : [])
+      setTechnicians(
+        (Array.isArray(usuariosData) ? usuariosData : []).filter(
+          (item) => item.nivel_acesso === "tecnico"
+        )
+      )
+      setAssignedTechnicians((current) => {
+        const next = { ...current }
+
+        ;(Array.isArray(chamadosData) ? chamadosData : []).forEach((item) => {
+          if (item.tecnico_id && next[item.id] === undefined) {
+            next[item.id] = String(item.tecnico_id)
+          }
+        })
+
+        return next
+      })
     } catch (fetchError) {
       setError(fetchError.message || "Não foi possivel carregar a operação.")
     } finally {
       setLoading(false)
     }
-  }, [canManageQueue, user])
+  }, [canManageQueue, isAdmin, user])
 
   useEffect(() => {
     if (!ready || !user) {
@@ -82,9 +106,22 @@ export default function OperacaoPage() {
     setSuccess("")
 
     try {
+      const payload = { status }
+
+      if (status === "em_atendimento" && isAdmin) {
+        const tecnicoId = assignedTechnicians[id]
+
+        if (!tecnicoId) {
+          setError("Selecione um tecnico responsavel antes de iniciar o atendimento.")
+          return
+        }
+
+        payload.tecnico_id = Number(tecnicoId)
+      }
+
       await apiFetch(`/chamados/${id}/status`, {
         method: "PUT",
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(payload),
       })
       setSuccess("Fila atualizada com sucesso.")
       await loadPageData()
@@ -203,6 +240,26 @@ export default function OperacaoPage() {
                     </div>
 
                     <div className="mt-4 flex flex-wrap gap-2">
+                      {isAdmin && item.status === "aberto" ? (
+                        <select
+                          className="h-9 min-w-56 rounded-md border border-input bg-transparent px-2.5 py-1 text-sm"
+                          value={assignedTechnicians[item.id] || ""}
+                          onChange={(event) =>
+                            setAssignedTechnicians((current) => ({
+                              ...current,
+                              [item.id]: event.target.value,
+                            }))
+                          }
+                        >
+                          <option value="">Selecione um tecnico</option>
+                          {technicians.map((technician) => (
+                            <option key={technician.id} value={technician.id}>
+                              {technician.nome} - {technician.email}
+                            </option>
+                          ))}
+                        </select>
+                      ) : null}
+
                       {item.status === "aberto" ? (
                         <>
                           <Button size="sm" onClick={() => handleStatusUpdate(item.id, "em_atendimento")}>
