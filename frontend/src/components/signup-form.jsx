@@ -95,6 +95,9 @@ export function SignupForm({
                 <p className="text-sm text-balance text-muted-foreground">
                   Insira seus dados para criar sua conta no TechRent
                 </p>
+                <p className="text-xs text-balance text-muted-foreground">
+                  Contas de administrador e tecnico sao criadas dentro do painel por um administrador.
+                </p>
               </div>
 
               {error ? <p className="text-center text-sm text-red-500">{error}</p> : null}

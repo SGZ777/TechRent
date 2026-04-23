@@ -173,7 +173,7 @@ export default function EquipamentosPage() {
             >
               <option value="">Todos</option>
               <option value="operacional">Operacional</option>
-              <option value="em_manutencao">Em manutencao</option>
+              <option value="em_manutencao">Em manutenção</option>
               <option value="desativado">Desativado</option>
             </select>
           </div>
@@ -224,13 +224,13 @@ export default function EquipamentosPage() {
                 onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}
               >
                 <option value="operacional">Operacional</option>
-                <option value="em_manutencao">Em manutencao</option>
+                <option value="em_manutencao">Em manutenção</option>
                 <option value="desativado">Desativado</option>
               </select>
             </div>
 
             <div className="space-y-2 md:col-span-2">
-              <label className="text-sm font-medium">Descricao</label>
+              <label className="text-sm font-medium">Descrição</label>
               <textarea
                 className="min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
                 value={form.descricao}

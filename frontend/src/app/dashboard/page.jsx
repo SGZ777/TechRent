@@ -155,32 +155,32 @@ export default function DashboardPage() {
         </>
       ) : null}
 
-      {!loading && !error && user.nivel_acesso === "tecnico" ? (
+      {!loading && !error && user.nivel_acesso === "técnico" ? (
         <>
           <div className="grid gap-4 md:grid-cols-3">
             <SummaryCard
               title="Chamados na fila"
               value={technicianData.length}
-              description="Demandas abertas ou em atendimento no painel tecnico."
+              description="Demandas abertas ou em atendimento no painel técnico."
               icon={WrenchIcon}
             />
             <SummaryCard
               title="Em atendimento"
               value={chamadosEmAtendimento}
-              description="Chamados que ja estao sob acompanhamento tecnico."
+              description="Chamados que já estão sob acompanhamento técnico."
               icon={Clock3Icon}
             />
             <SummaryCard
               title="Prioridade alta"
               value={chamadosCriticos}
-              description="Itens que exigem acao mais rapida."
+              description="Itens que exigem ação mais rápida."
               icon={ShieldAlertIcon}
             />
           </div>
 
           <SectionCard
-            title="Fila tecnica"
-            subtitle="Visao operacional retornada por /dashboard/tecnico."
+            title="Fila técnica"
+            subtitle="Visão operacional retornada por /dashboard/tecnico."
           >
             {technicianData.length === 0 ? (
               <div className="rounded-xl bg-muted/60 p-4 text-sm text-muted-foreground">
@@ -210,9 +210,9 @@ export default function DashboardPage() {
                       </div>
                     </div>
                     <div className="mt-4 grid gap-3 text-sm text-muted-foreground md:grid-cols-2 xl:grid-cols-4">
-                      <p><strong>Categoria:</strong> {item.categoria || "Nao informada"}</p>
-                      <p><strong>Patrimonio:</strong> {item.patrimonio || "Nao informado"}</p>
-                      <p><strong>Tecnico:</strong> {item.tecnico_responsavel || "Nao atribuido"}</p>
+                      <p><strong>Categoria:</strong> {item.categoria || "Não informada"}</p>
+                      <p><strong>Patrimonio:</strong> {item.patrimonio || "Não informado"}</p>
+                      <p><strong>Técnico:</strong> {item.tecnico_responsavel || "Não atribuído"}</p>
                       <p><strong>Abertura:</strong> {formatDate(item.aberto_em)}</p>
                     </div>
                   </article>
@@ -226,10 +226,9 @@ export default function DashboardPage() {
       {!loading && !error && user.nivel_acesso === "cliente" ? (
         <SectionCard
           title="Perfil do cliente"
-          subtitle="Seu foco principal fica na abertura e acompanhamento de chamados."
-        >
+          subtitle="Seu foco principal fica na abertura e acompanhamento de chamados.">
           <div className="rounded-xl bg-muted/60 p-4 text-sm text-muted-foreground">
-            Use a pagina de chamados para abrir novas solicitacoes e acompanhar o andamento.
+            Use a página de chamados para abrir novas solicitações e acompanhar o andamento.
           </div>
         </SectionCard>
       ) : null}

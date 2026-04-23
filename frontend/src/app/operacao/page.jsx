@@ -134,7 +134,7 @@ export default function OperacaoPage() {
           subtitle="Esta pagina e destinada a administradores e equipe tecnica."
         >
           <div className="rounded-xl bg-muted/60 p-4 text-sm text-muted-foreground">
-            Seu perfil nao possui acesso operacional. Use a pagina de chamados para acompanhar suas solicitacoes.
+            Seu perfil não possui acesso operacional. Use a página de chamados para acompanhar suas solicitações.
           </div>
         </SectionCard>
       ) : (
@@ -231,7 +231,7 @@ export default function OperacaoPage() {
                         />
                         <div className="mt-3">
                           <Button size="sm" onClick={() => handleRegisterMaintenance(item)}>
-                            Registrar manutencao e resolver
+                            Registrar manutenção e resolver
                           </Button>
                         </div>
                       </div>
@@ -250,7 +250,7 @@ export default function OperacaoPage() {
               <div className="h-24 animate-pulse rounded-2xl bg-muted" />
             ) : historico.length === 0 ? (
               <div className="rounded-xl bg-muted/60 p-4 text-sm text-muted-foreground">
-                Nenhuma manutencao registrada ate agora.
+                Nenhuma manutenção registrada até agora.
               </div>
             ) : (
               <div className="grid gap-4">
