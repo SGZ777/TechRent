@@ -1,156 +1,161 @@
-## TechRent - MVP de Chamados / Manutencao (TI)
+## TechRent - MVP de Chamados de TI
 
-Este MVP tem foco em centralizar o relato de problemas de TI, permitir que administradores gerenciem o fluxo e que tecnicos resolvam os chamados, com base no modelo de banco de dados presente em `bd/`.
+Este MVP centraliza o relato de problemas de TI, permite que administradores acompanhem a operacao e gerenciem perfis, e faz com que tecnicos assumam e concluam chamados com registro de manutencao, seguindo o modelo definido em `bd/`.
 
-> Observacao: o seu banco atual foi modelado com as tabelas e views abaixo; para o MVP de TI, alguns nomes foram mapeados conceitualmente (por exemplo, `alugueis` funciona como “chamados”).
+## Estrutura principal
 
-## Stack (pretendida)
+- `bd/`
+  - `schema.sql`: banco, tabelas e relacionamentos
+  - `views.sql`: views usadas pelos dashboards
+- `backend/`
+  - API Express com JWT, rotas de autenticacao, chamados, equipamentos, manutencao, dashboard e usuarios
+- `frontend/`
+  - App Next.js com telas para login, dashboard, chamados, operacao, equipamentos e gestao de usuarios
 
-- Frontend: Next.js (App Router) + Tailwind CSS + shadcn/ui (Radix UI, Lucide, Sonner Toast)
-- Backend: Node.js + Express + JWT
+`next-app/` e `techrent/` permanecem no repositorio como apps paralelos/template, mas o MVP funcional atual esta concentrado em `frontend/`.
+
+## Stack
+
+- Frontend: Next.js (App Router)
+- Backend: Node.js + Express
+- Autenticacao: JWT
 - Banco: MySQL
 
-## Modelo de Dados (MySQL)
-
-### Database
-
-- Nome: `techrent_db`
-- Scripts:
-  - `bd/schema.sql` (cria o banco e as tabelas)
-  - `bd/views.sql` (cria as views)
+## Modelo de dados
 
 ### Tabelas
 
-`usuarios` (perfis do sistema)
+`usuarios`
 
-- `id` (PK, AUTO_INCREMENT)
-- `nome` (varchar(100), NOT NULL)
-- `email` (varchar(100), UNIQUE, NOT NULL)
-- `senha` (varchar(255), NOT NULL) -> armazena o hash para JWT/login
-- `nivel_acesso` (ENUM: `cliente`, `admin`, `tecnico`)
-- `criado_em` (TIMESTAMP, default CURRENT_TIMESTAMP)
+- perfis do sistema
+- `nivel_acesso`: `cliente`, `admin`, `tecnico`
 
-`equipamentos` (maquinas/equipamentos dos laboratorios)
+`equipamentos`
 
-- `id` (PK, AUTO_INCREMENT)
-- `nome` (varchar(100), NOT NULL)
-- `categoria` (varchar(50), ex: Laptop, Projetor, Tablet)
-- `preco_diaria` (decimal(10,2), NOT NULL) -> no contexto de TI, pode ser usado como “custo/impacto” para metricao
-- `status` (ENUM: `disponivel`, `alugado`, `manutencao`) -> estado operacional
-- `descricao` (TEXT)
+- inventario de ativos monitorados
+- `status`: `operacional`, `em_manutencao`, `desativado`
 
-`alugueis` (NO MVP: chamados/reservas de atendimento)
+`chamados`
 
-- `id` (PK, AUTO_INCREMENT)
-- `usuario_id` (FK -> `usuarios.id`) -> quem abriu o chamado (cliente)
-- `equipamento_id` (FK -> `equipamentos.id`) -> qual equipamento sera atendido
-- `data_inicio` (DATE, NOT NULL) -> data de abertura
-- `data_fim` (DATE, NOT NULL) -> data prevista/limite
-- `valor_total` (decimal(10,2), NOT NULL) -> no contexto de TI, pode ser usado como custo estimado
-- `status_reserva` (ENUM: `pendente`, `ativo`, `finalizado`, `cancelado`) -> estado do chamado
-- Relacoes:
-  - ON DELETE CASCADE para `usuarios` e `equipamentos`
+- registro central das solicitacoes
+- vincula cliente, equipamento e tecnico responsavel
+- `prioridade`: `baixa`, `media`, `alta`
+- `status`: `aberto`, `em_atendimento`, `resolvido`, `cancelado`
 
-`historico_manutencao` (NO MVP: registro do que o tecnico fez)
+`historico_manutencao`
 
-- `id` (PK, AUTO_INCREMENT)
-- `equipamento_id` (FK -> `equipamentos.id`)
-- `tecnico_id` (FK -> `usuarios.id`) -> tecnico que registrou o reparo
-- `descricao_reparo` (TEXT)
-- `data_manutencao` (DATETIME, default CURRENT_TIMESTAMP)
+- registro do reparo executado
+- vincula chamado, equipamento e tecnico
 
 ### Views
 
-`view_equipamentos_disponiveis`
+`view_equipamentos_operacionais`
 
-- Lista equipamentos com `equipamentos.status = 'disponivel'`
+- lista equipamentos aptos a receber novos chamados
 
 `view_painel_tecnico`
 
-- Retorna chamados em `pendente` ou `ativo` (via `alugueis.status_reserva`)
-- Inclui `aluguel_id`, `cliente`, `equipamento`, `data_inicio` e `status_reserva`
-- Observacao: a view nao traz `tecnico_id` diretamente; a associacao do tecnico com a resolucao ocorre via `historico_manutencao`.
+- mostra chamados `aberto` ou `em_atendimento`
+- inclui solicitante, equipamento e tecnico responsavel
 
-`view_resumo_admin`
+`view_resumo_chamados`
 
-- Agrupa por `equipamentos.status`
-- Colunas:
-  - `status`
-  - `total_itens` (COUNT)
-  - `potencial_receita_diaria` (SUM de `preco_diaria`)
-- Observacao: por enquanto essa metricacao e feita sobre `preco_diaria`. Para TI, voce pode adaptar o significado (por exemplo custo/impacto do equipamento).
+- consolida chamados por status
 
-## Fluxos do MVP (mapeados ao banco)
+`view_resumo_equipamentos`
 
-### 1) Usuario relata um problema
+- consolida equipamentos por status operacional
 
-Como o banco atual nao possui uma tabela chamada “chamados” explicitamente, o fluxo usa `alugueis`:
+## Fluxos do MVP
 
-- Criar um usuario com `nivel_acesso = 'cliente'`
-- Selecionar o equipamento (em geral com status `disponivel`, usando `view_equipamentos_disponiveis`)
-- Inserir um registro em `alugueis` com:
-  - `usuario_id` = id do usuario logado
-  - `equipamento_id` = maquina afetada
-  - `data_inicio` e `data_fim`
-  - `valor_total` = estimativa (opcional no contexto TI)
-  - `status_reserva = 'pendente'`
-- Opcional (para refletir estado operacional):
-  - atualizar `equipamentos.status` para `alugado` ou `manutencao` (a regra pode ser definida pela sua logica de backend)
+### 1. Cliente abre um chamado
 
-### 2) Administrador gerencia a equipe
+- faz login com perfil `cliente`
+- seleciona um equipamento operacional
+- envia `titulo`, `descricao`, `equipamento_id` e `prioridade`
+- o backend cria o registro em `chamados` com status `aberto`
+- o equipamento passa para `em_manutencao`
 
-O banco ja diferencia `admin` e `tecnico` em `usuarios.nivel_acesso`.
+### 2. Administrador gerencia a operacao
 
-Para o admin:
-- Utilizar `view_resumo_admin` para metricao do parque de equipamentos por status
-- Gerenciar acesso:
-  - controle de quem e `admin` ou `tecnico` e feito no proprio `usuarios.nivel_acesso`
+- acessa o dashboard com os resumos vindos das views
+- acompanha a fila de chamados
+- pode iniciar atendimento atribuindo um tecnico responsavel
+- gerencia equipamentos
+- gerencia perfis de usuario pela tela de usuarios
 
-### 3) Tecnico resolve o chamado
+### 3. Tecnico atende e conclui
 
-No MVP, o tecnico:
+- visualiza a fila em aberto ou em atendimento
+- assume um chamado, mudando o status para `em_atendimento`
+- registra o reparo em `historico_manutencao`
+- ao registrar a manutencao, o backend conclui o chamado como `resolvido`
+- o equipamento volta para `operacional`
 
-- Visualiza chamados em execucao/abertos via `view_painel_tecnico` (status `pendente` ou `ativo`)
-- Quando inicia o atendimento:
-  - atualizar `alugueis.status_reserva` para `ativo` (regra do backend)
-- Quando resolve:
-  - inserir um registro em `historico_manutencao` com `equipamento_id`, `tecnico_id` e `descricao_reparo`
-  - atualizar `alugueis.status_reserva` para `finalizado`
-  - atualizar `equipamentos.status` para `disponivel` (ou outro estado definido)
+## Regras importantes do fluxo atual
 
-## Setup do banco (local)
+- um chamado nao pode ser marcado como `resolvido` diretamente pela rota de status
+- a conclusao exige registro em `historico_manutencao`
+- manutencao so pode ser registrada em chamado `em_atendimento`
+- se o chamado tiver tecnico responsavel, apenas esse tecnico pode conclui-lo
+- administradores podem atribuir tecnicos quando iniciam o atendimento
 
-1. Criar a estrutura:
-   - execute `bd/schema.sql`
-2. Criar as views:
-   - execute `bd/views.sql`
+## Endpoints principais
 
-Exemplo (ordem sugerida):
+### Autenticacao
+
+- `POST /auth/registro`
+- `POST /auth/login`
+
+### Equipamentos
+
+- `GET /equipamentos`
+- `GET /equipamentos/:id`
+- `POST /equipamentos` (`admin`)
+- `PUT /equipamentos/:id` (`admin`)
+- `DELETE /equipamentos/:id` (`admin`)
+
+### Chamados
+
+- `GET /chamados`
+- `GET /chamados/:id`
+- `POST /chamados` (`cliente`, `admin`)
+- `PUT /chamados/:id/status` (`tecnico`, `admin`)
+
+### Manutencao
+
+- `GET /manutencao` (`admin`, `tecnico`)
+- `POST /manutencao` (`tecnico`)
+
+### Dashboard
+
+- `GET /dashboard/admin` (`admin`)
+- `GET /dashboard/tecnico` (`admin`, `tecnico`)
+
+### Usuarios
+
+- `GET /usuarios` (`admin`)
+- `PUT /usuarios/:id/nivel-acesso` (`admin`)
+
+## Setup do banco
+
+Execute na ordem:
 
 ```sql
--- 1) Tabelas
 SOURCE bd/schema.sql;
-
--- 2) Views
 SOURCE bd/views.sql;
 ```
 
-## Observacoes e lacunas do modelo atual
+## Seed demo
 
-1. Nao existe `tecnico_id` direto na tabela `alugueis`.
-   - Se voce quiser “atribuicao” de tecnico ao chamado (para garantir que cada chamado pertence a um tecnico especifico), a modelagem atual precisa ser estendida (por exemplo, adicionar `tecnico_id` em `alugueis`).
-2. O modelo foi criado com terminologia de aluguel (tabela `alugueis`) e metrica em `preco_diaria`.
-   - No MVP de TI, isso funciona como adaptacao conceitual, mas pode exigir ajustes futuros de nomes/regras.
+No backend, existe um seed para demonstracao:
 
-## Proximo passo (backend/contrato)
+```bash
+npm run seed:demo
+```
 
-Como o `backend/` esta vazio neste workspace, o README acima descreve o “contrato” esperado do MVP em cima do banco.
+Usuarios criados:
 
-Ao implementar o Express + JWT, a recomendacao e:
-- Endpoints para:
-  - autenticar usuarios (JWT)
-  - listar/alterar `equipamentos`
-  - criar/atualizar “chamados” em `alugueis`
-  - registrar reparos em `historico_manutencao`
-  - dashboards usando as views `view_painel_tecnico` e `view_resumo_admin`
-- Regras de autorizacao por `usuarios.nivel_acesso`
+- `admin@techrent.local / 12345678`
+- `tecnico@techrent.local / 12345678`
+- `cliente@techrent.local / 12345678`

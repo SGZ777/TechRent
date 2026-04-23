@@ -74,7 +74,7 @@ const registrar = async (req, res) => {
     await conn.beginTransaction();
 
     const [chamados] = await conn.query(
-      'SELECT id, status, equipamento_id FROM chamados WHERE id = ?',
+      'SELECT id, status, equipamento_id, tecnico_id FROM chamados WHERE id = ?',
       [chamado_id]
     );
 
@@ -94,6 +94,20 @@ const registrar = async (req, res) => {
       await conn.rollback();
       return res.status(422).json({
         mensagem: `Chamado ja esta '${chamado.status}' e nao pode receber manutencao`,
+      });
+    }
+
+    if (chamado.status !== 'em_atendimento') {
+      await conn.rollback();
+      return res.status(422).json({
+        mensagem: 'O chamado precisa estar em atendimento antes de registrar a manutencao.',
+      });
+    }
+
+    if (chamado.tecnico_id && Number(chamado.tecnico_id) !== Number(tecnico_id)) {
+      await conn.rollback();
+      return res.status(403).json({
+        mensagem: 'Somente o tecnico responsavel pode concluir este chamado.',
       });
     }
 

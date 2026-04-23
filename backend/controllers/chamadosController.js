@@ -3,6 +3,7 @@
 // =============================================
 
 const db = require('../config/database');
+const niveisTecnicos = ['tecnico'];
 
 // GET /chamados - lista chamados
 const listar = async (req, res) => {
@@ -167,9 +168,9 @@ const criar = async (req, res) => {
 const atualizarStatus = async (req, res) => {
   const { id } = req.params;
   const { status, tecnico_id } = req.body;
-  const tecnicoResponsavel = tecnico_id || req.usuario.id;
+  const { id: usuarioId, nivel_acesso } = req.usuario;
 
-  const statusValidos = ['em_atendimento', 'resolvido', 'cancelado'];
+  const statusValidos = ['em_atendimento', 'cancelado'];
   if (!status || !statusValidos.includes(status)) {
     return res.status(400).json({
       mensagem: `Status invalido. Use: ${statusValidos.join(', ')}`,
@@ -178,7 +179,7 @@ const atualizarStatus = async (req, res) => {
 
   const transicoesValidas = {
     aberto: ['em_atendimento', 'cancelado'],
-    em_atendimento: ['resolvido', 'cancelado'],
+    em_atendimento: ['cancelado'],
   };
 
   const conn = await db.getConnection();
@@ -208,7 +209,34 @@ const atualizarStatus = async (req, res) => {
     const campos = ['status = ?', 'atualizado_em = NOW()'];
     const valores = [status];
 
-    if (status === 'em_atendimento' || status === 'resolvido') {
+    if (status === 'em_atendimento') {
+      let tecnicoResponsavel = null;
+
+      if (nivel_acesso === 'tecnico') {
+        tecnicoResponsavel = usuarioId;
+      } else if (nivel_acesso === 'admin') {
+        if (!tecnico_id) {
+          await conn.rollback();
+          return res.status(400).json({
+            mensagem: 'Informe o tecnico responsavel para iniciar o atendimento.',
+          });
+        }
+
+        const [tecnicos] = await conn.query(
+          'SELECT id, nivel_acesso FROM usuarios WHERE id = ?',
+          [tecnico_id]
+        );
+
+        if (tecnicos.length === 0 || !niveisTecnicos.includes(tecnicos[0].nivel_acesso)) {
+          await conn.rollback();
+          return res.status(422).json({
+            mensagem: 'O usuario informado nao possui perfil tecnico.',
+          });
+        }
+
+        tecnicoResponsavel = tecnico_id;
+      }
+
       campos.push('tecnico_id = ?');
       valores.push(tecnicoResponsavel);
     }
@@ -220,7 +248,7 @@ const atualizarStatus = async (req, res) => {
       valores
     );
 
-    if (status === 'resolvido' || status === 'cancelado') {
+    if (status === 'cancelado') {
       await conn.query(
         "UPDATE equipamentos SET status = 'operacional' WHERE id = ?",
         [chamado.equipamento_id]

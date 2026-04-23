@@ -19,6 +19,7 @@ import {
   ClipboardListIcon,
   LayoutDashboardIcon,
   MonitorCogIcon,
+  UsersIcon,
   Settings2Icon,
   ShieldCheckIcon,
   TicketsIcon,
@@ -133,6 +134,8 @@ export function AppSidebar({
         plan: formatRole(role),
       },
     ],
+    navMain,
+    projects,
     navMain,
     projects,
   }
