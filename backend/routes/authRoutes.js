@@ -20,4 +20,7 @@ router.post('/usuarios', autenticar, autorizar('admin'), authController.registro
 // POST /auth/login - autentica e retorna o token JWT
 router.post('/login', authController.login);
 
+// POST /auth/google - autentica via Google
+router.post('/google', authController.googleLogin);
+
 module.exports = router;

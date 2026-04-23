@@ -4,7 +4,10 @@
 
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { OAuth2Client } = require('google-auth-library');
 const db = require('../config/database');
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const PERFIS_PUBLICOS = ['cliente'];
 const PERFIS_INTERNOS = ['admin', 'tecnico'];
@@ -204,4 +207,74 @@ const login = async (req, res) => {
   }
 };
 
-module.exports = { registro, registroInterno, listarUsuariosInternos, login };
+// POST /auth/google - autentica via Google
+const googleLogin = async (req, res) => {
+  const { token: googleToken } = req.body;
+
+  if (!googleToken) {
+    return res.status(400).json({ mensagem: 'Token do Google não fornecido' });
+  }
+
+  try {
+    // 1. Verificar o token com o Google (usando o endpoint de userinfo para access_token)
+    const response = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${googleToken}`);
+    
+    if (!response.ok) {
+      throw new Error('Falha ao validar token com o Google');
+    }
+
+    const payload = await response.json();
+    const { email, name, sub: googleId } = payload;
+
+    // 2. Verificar se o usuário já existe
+    let [rows] = await db.query(
+      'SELECT id, nome, email, nivel_acesso FROM usuarios WHERE email = ?',
+      [email.toLowerCase()]
+    );
+
+    let usuario;
+
+    if (rows.length === 0) {
+      // 3. Se não existe, criar como 'cliente'
+      // Usamos o googleId como uma senha aleatória (não será usada para login tradicional)
+      const salt = await bcrypt.genSalt(10);
+      const senhaHash = await bcrypt.hash(googleId, salt);
+
+      const [resultado] = await db.query(
+        'INSERT INTO usuarios (nome, email, senha, nivel_acesso) VALUES (?, ?, ?, ?)',
+        [name, email.toLowerCase(), senhaHash, 'cliente']
+      );
+
+      usuario = {
+        id: resultado.insertId,
+        nome: name,
+        email: email.toLowerCase(),
+        nivel_acesso: 'cliente'
+      };
+    } else {
+      usuario = rows[0];
+    }
+
+    // 4. Gerar JWT do TechRent
+    const token = jwt.sign(
+      {
+        id: usuario.id,
+        nome: usuario.nome,
+        email: usuario.email,
+        nivel_acesso: usuario.nivel_acesso,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '8h' }
+    );
+
+    return res.json({
+      mensagem: 'Login com Google realizado com sucesso',
+      token,
+    });
+  } catch (erro) {
+    console.error('Erro no login com Google:', erro);
+    return res.status(401).json({ mensagem: 'Token do Google inválido ou expirado' });
+  }
+};
+
+module.exports = { registro, registroInterno, listarUsuariosInternos, login, googleLogin };

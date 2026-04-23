@@ -1,6 +1,7 @@
 import { Geist, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { GoogleOAuthProvider } from '@react-oauth/google';
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
@@ -25,7 +26,11 @@ export default function RootLayout({ children }) {
       lang="pt-br"
       className={cn("h-full", "antialiased", geistSans.variable, geistMono.variable, "font-sans", inter.variable)}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID}>
+          {children}
+        </GoogleOAuthProvider>
+      </body>
     </html>
   );
 }
