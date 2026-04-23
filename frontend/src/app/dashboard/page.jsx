@@ -155,7 +155,7 @@ export default function DashboardPage() {
         </>
       ) : null}
 
-      {!loading && !error && user.nivel_acesso === "técnico" ? (
+      {!loading && !error && user.nivel_acesso === "tecnico" ? (
         <>
           <div className="grid gap-4 md:grid-cols-3">
             <SummaryCard

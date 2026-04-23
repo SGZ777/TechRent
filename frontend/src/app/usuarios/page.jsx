@@ -29,7 +29,7 @@ const INITIAL_FORM = {
   nivel_acesso: "tecnico",
 }
 
-function UsuarioList({ items }) {
+function UsuarioList({ items, currentUserId, onChangeRole, changingId }) {
   if (items.length === 0) {
     return (
       <div className="rounded-xl bg-muted/60 p-4 text-sm text-muted-foreground">
@@ -51,6 +51,32 @@ function UsuarioList({ items }) {
               {formatRole(item.nivel_acesso)}
             </span>
           </div>
+          {Number(item.id) !== Number(currentUserId) ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <select
+                className="h-8 rounded-md border border-input bg-transparent px-2.5 py-1 text-sm"
+                defaultValue={item.nivel_acesso}
+                id={`role-select-${item.id}`}
+              >
+                <option value="tecnico">Tecnico</option>
+                <option value="admin">Administrador</option>
+                <option value="cliente">Cliente</option>
+              </select>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={changingId === item.id}
+                onClick={() => {
+                  const select = document.getElementById(`role-select-${item.id}`)
+                  if (select) {
+                    onChangeRole(item.id, select.value)
+                  }
+                }}
+              >
+                {changingId === item.id ? "Salvando..." : "Alterar perfil"}
+              </Button>
+            </div>
+          ) : null}
         </article>
       ))}
     </div>
@@ -61,6 +87,7 @@ export default function UsuariosPage() {
   const { user, ready } = useAuthenticatedUser()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [changingId, setChangingId] = useState(null)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
   const [usuarios, setUsuarios] = useState([])
@@ -144,6 +171,26 @@ export default function UsuariosPage() {
       setError(submitError.message || "Não foi possivel criar a conta.")
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleChangeRole(id, nivel_acesso) {
+    setError("")
+    setSuccess("")
+    setChangingId(id)
+
+    try {
+      const data = await apiFetch(`/usuarios/${id}/nivel-acesso`, {
+        method: "PUT",
+        body: JSON.stringify({ nivel_acesso }),
+      })
+
+      setSuccess(data?.mensagem || "Perfil de acesso atualizado com sucesso.")
+      await loadUsuarios()
+    } catch (changeError) {
+      setError(changeError.message || "Nao foi possivel alterar o perfil de acesso.")
+    } finally {
+      setChangingId(null)
     }
   }
 
@@ -292,7 +339,12 @@ export default function UsuariosPage() {
                 {loading ? (
                   <div className="h-24 animate-pulse rounded-2xl bg-muted" />
                 ) : (
-                  <UsuarioList items={admins} />
+                  <UsuarioList
+                    items={admins}
+                    currentUserId={user?.id}
+                    onChangeRole={handleChangeRole}
+                    changingId={changingId}
+                  />
                 )}
               </SectionCard>
 
@@ -303,7 +355,12 @@ export default function UsuariosPage() {
                 {loading ? (
                   <div className="h-24 animate-pulse rounded-2xl bg-muted" />
                 ) : (
-                  <UsuarioList items={tecnicos} />
+                  <UsuarioList
+                    items={tecnicos}
+                    currentUserId={user?.id}
+                    onChangeRole={handleChangeRole}
+                    changingId={changingId}
+                  />
                 )}
               </SectionCard>
             </div>

@@ -23,7 +23,6 @@ import {
   Settings2Icon,
   ShieldCheckIcon,
   TicketsIcon,
-  UsersIcon,
 } from "lucide-react"
 
 export function AppSidebar({
@@ -134,8 +133,6 @@ export function AppSidebar({
         plan: formatRole(role),
       },
     ],
-    navMain,
-    projects,
     navMain,
     projects,
   }
